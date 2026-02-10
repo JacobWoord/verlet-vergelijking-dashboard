@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verlet Integratie Vergelijking — NetDesigner</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #232733;
+  --border: #2e3345;
+  --text: #e1e4ed;
+  --text-muted: #8b90a0;
+  --classic-1: #4a9eff;
+  --classic-2: #2d7dd2;
+  --classic-3: #1a5fa8;
+  --classic-4: #6bb5ff;
+  --classic-5: #89c4ff;
+  --velocity-1: #ff8c42;
+  --velocity-2: #d46a2e;
+  --velocity-3: #a84e1a;
+  --velocity-4: #ffaa6e;
+  --velocity-5: #ffc49a;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --radius: 10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.header h1 span { color: var(--classic-1); }
+
+.header-actions { display: flex; gap: 10px; align-items: center; }
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--classic-1); border-color: var(--classic-1); color: #fff; }
+.btn-primary:hover { background: var(--classic-2); }
+
+.container { max-width: 1440px; margin: 0 auto; padding: 24px 32px; }
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  margin-bottom: 24px;
+  background: var(--surface);
+}
+
+.drop-zone.dragover {
+  border-color: var(--classic-1);
+  background: rgba(74, 158, 255, 0.05);
+}
+
+.drop-zone h2 { font-size: 18px; margin-bottom: 8px; font-weight: 500; }
+.drop-zone p { color: var(--text-muted); font-size: 14px; }
+
+.drop-zone input[type="file"] { display: none; }
+
+/* File List */
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.file-tag .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.file-tag .remove {
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.file-tag .remove:hover { opacity: 1; }
+
+/* Dashboard hidden until data */
+#dashboard { display: none; }
+
+/* Scorecards */
+.scorecards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.scorecard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.scorecard .label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.scorecard .winner {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.scorecard .value {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.scorecard.classic .winner { color: var(--classic-1); }
+.scorecard.velocity .winner { color: var(--velocity-1); }
+
+.recommendation {
+  background: var(--surface);
+  border: 2px solid var(--green);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.recommendation .badge {
+  background: var(--green);
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.recommendation .text { font-size: 15px; }
+.recommendation .text strong { color: var(--green); }
+
+/* Section */
+.section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title .num {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 16px;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.chart-card h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.chart-card canvas { width: 100% !important; }
+
+.chart-card.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Detail Table */
+.detail-table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.detail-table th {
+  background: var(--surface2);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.detail-table th:hover { color: var(--classic-1); }
+
+.detail-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.detail-table tr:last-child td { border-bottom: none; }
+.detail-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.cell-best { color: var(--green); font-weight: 600; }
+.cell-worst { color: var(--red); font-weight: 600; }
+
+.detail-table .cb-cell { width: 40px; text-align: center; }
+.detail-table input[type="checkbox"] {
+  width: 16px; height: 16px; cursor: pointer;
+  accent-color: var(--classic-1);
+}
+.detail-table tr.excluded td { opacity: 0.35; }
+.detail-table tr.excluded td:first-child { opacity: 1; }
+
+.table-actions {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 10px;
+}
+.table-actions .btn { font-size: 12px; padding: 5px 12px; }
+
+/* Method filter */
+.method-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.method-filter .chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all 0.15s;
+}
+
+.method-filter .chip.active { border-color: var(--text); color: #fff; }
+.method-filter .chip.classic.active { border-color: var(--classic-1); color: var(--classic-1); }
+.method-filter .chip.velocity.active { border-color: var(--velocity-1); color: var(--velocity-1); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 16px; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .header { padding: 16px; }
+}
+
+@media print {
+  .header { position: static; }
+  .drop-zone, .file-list, .header-actions, .method-filter, .table-actions { display: none !important; }
+  .chart-card { break-inside: avoid; }
+  body { background: #fff; color: #111; }
+  .surface, .scorecard, .chart-card, .recommendation, .detail-table-wrap { background: #fff; border-color: #ddd; }
+
+  /* Table: make all content visible on print */
+  .detail-table-wrap { overflow: visible; }
+  .detail-table { font-size: 9px; }
+  .detail-table th, .detail-table td { padding: 4px 6px; white-space: normal; word-break: break-word; }
+  .detail-table .cb-cell { display: none; }
+  .detail-table th:first-child { display: none; }
+  .detail-table tr.excluded { display: none; }
+  .cell-best { color: #059669; }
+  .cell-worst { color: #dc2626; }
+
+  /* Landscape hint */
+  @page { size: landscape; margin: 10mm; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>NetDesigner</span> — Verlet Integratie Vergelijking</h1>
+  <div class="header-actions">
+    <span id="fileCount" style="font-size:13px;color:var(--text-muted)">0 bestanden geladen</span>
+    <button class="btn" onclick="window.print()">Print</button>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Bestanden Toevoegen</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <h2>Sleep .xlsx bestanden hierheen</h2>
+    <p>Of klik om bestanden te selecteren — meerdere bestanden tegelijk mogelijk</p>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+  </div>
+
+  <!-- File Tags -->
+  <div class="file-list" id="fileList"></div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <!-- Method Filter -->
+    <div class="method-filter" id="methodFilter">
+      <div class="chip active" data-filter="all" onclick="setFilter('all',this)">Alle Methodes</div>
+      <div class="chip classic" data-filter="classic" onclick="setFilter('classic',this)">Classic Verlet</div>
+      <div class="chip velocity" data-filter="velocity" onclick="setFilter('velocity',this)">Velocity Verlet</div>
+    </div>
+
+    <!-- Recommendation -->
+    <div class="recommendation" id="recommendation">
+      <div class="badge" id="recBadge">AANBEVELING</div>
+      <div class="text" id="recText"></div>
+    </div>
+
+    <!-- Scorecards -->
+    <div class="scorecards" id="scorecards"></div>
+
+    <!-- Section 1: Rek Vergelijking -->
+    <div class="section">
+      <div class="section-title"><span class="num">1</span> Rek Vergelijking</div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Gemiddelde Rek (%) over Tijd</h3><canvas id="chartGemRek"></canvas></div>
+        <div class="chart-card"><h3>Max Rek (%) over Tijd</h3><canvas id="chartMaxRek"></canvas></div>
+        <div class="chart-card"><h3>Verdeling Gem. Rek per Methode (Box Plot)</h3><canvas id="chartBoxRek"></canvas></div>
+        <div class="chart-card"><h3>Finale Rek (%) per Bestand</h3><canvas id="chartFinaleRek"></canvas></div>
+        <div class="chart-card full-width"><h3>Rek per Component (cm) — Laatste Meting</h3><canvas id="chartComponents"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Section 2: Stiff Element Analyse -->
+    <div class="section">
+      <div class="section-title"><span class="num">2</span> Stiff Element Analyse</div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Gem. Rek Stiff (%) over Tijd</h3><canvas id="chartGemRekStiff"></canvas></div>
+        <div class="chart-card"><h3>Max Rek Stiff (%) over Tijd</h3><canvas id="chartMaxRekStiff"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Section 3: Performance Analyse -->
+    <div class="section">
+      <div class="section-title"><span class="num">3</span> Performance Analyse</div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Gem. Iteratietijd (ms) over Iteraties</h3><canvas id="chartIterTime"></canvas></div>
+        <div class="chart-card"><h3>Gemiddelde Iteratietijd per Bestand</h3><canvas id="chartIterTimeBar"></canvas></div>
+        <div class="chart-card full-width"><h3>Efficiency: Rek per ms Iteratietijd (lager = beter)</h3><canvas id="chartEfficiency"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Section 4: Net Deformatie -->
+    <div class="section">
+      <div class="section-title"><span class="num">4</span> Net Deformatie</div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Delta Lengte (m) over Tijd</h3><canvas id="chartDeltaL"></canvas></div>
+        <div class="chart-card"><h3>Delta Breedte (m) over Tijd</h3><canvas id="chartDeltaB"></canvas></div>
+        <div class="chart-card"><h3>Delta Hoogte (m) over Tijd</h3><canvas id="chartDeltaH"></canvas></div>
+        <div class="chart-card"><h3>Net Dimensies: Initieel vs Finaal</h3><canvas id="chartRadar"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Section 5: Detail Tabel -->
+    <div class="section">
+      <div class="section-title"><span class="num">5</span> Overzichtstabel</div>
+      <div class="table-actions">
+        <button class="btn" onclick="toggleAllInclusion(true)">Alles Selecteren</button>
+        <button class="btn" onclick="toggleAllInclusion(false)">Alles Deselecteren</button>
+        <span id="inclusionCount" style="font-size:12px;color:var(--text-muted)"></span>
+      </div>
+      <div class="detail-table-wrap">
+        <table class="detail-table" id="detailTable">
+          <thead><tr>
+            <th class="cb-cell"><input type="checkbox" checked onchange="toggleAllInclusion(this.checked)" title="Alles selecteren/deselecteren"></th>
+            <th onclick="sortTable(1)">Bestand</th>
+            <th onclick="sortTable(2)">Methode</th>
+            <th onclick="sortTable(3)">Sub-stepping</th>
+            <th onclick="sortTable(4)">Half-step</th>
+            <th onclick="sortTable(5)">Adaptive</th>
+            <th onclick="sortTable(6)">Constraint Iter.</th>
+            <th onclick="sortTable(7)">Stiff Iter.</th>
+            <th onclick="sortTable(8)">Finale Gem. Rek (%)</th>
+            <th onclick="sortTable(9)">Finale Max Rek (%)</th>
+            <th onclick="sortTable(10)">Gem. Iteratietijd (ms)</th>
+            <th onclick="sortTable(11)">Simulatieduur (s)</th>
+            <th onclick="sortTable(12)">Iteraties</th>
+          </tr></thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+const state = {
+  files: [],       // {name, method, color, metrics, startValues, settings, visible}
+  charts: {},
+  filter: 'all',
+  sortCol: -1,
+  sortAsc: true
+};
+
+const classicColors = ['#4a9eff','#2d7dd2','#1a5fa8','#6bb5ff','#89c4ff','#3d8ee6','#5aa3ff','#7abcff','#1070cc','#0d5eaa'];
+const velocityColors = ['#ff8c42','#d46a2e','#a84e1a','#ffaa6e','#ffc49a','#e67a35','#ff9955','#ffbb80','#c05a20','#b34d15'];
+let classicIdx = 0, velocityIdx = 0;
+
+// ===== FILE LOADING =====
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(fileList) {
+  for (const file of fileList) {
+    if (state.files.some(f => f.name === file.name)) continue;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const parsed = parseWorkbook(wb, file.name);
+        if (parsed) {
+          state.files.push(parsed);
+          renderAll();
+        }
+      } catch (err) {
+        console.error('Error parsing', file.name, err);
+        alert('Fout bij laden van ' + file.name + ': ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function parseWorkbook(wb, name) {
+  // Parse metrics
+  const metricsSheet = wb.Sheets['Simulatie Metrics'];
+  if (!metricsSheet) { alert(name + ': Sheet "Simulatie Metrics" niet gevonden'); return null; }
+  const metrics = XLSX.utils.sheet_to_json(metricsSheet);
+
+  // Normalize time column (could be "Tijd (s)" or "j" or other)
+  metrics.forEach(row => {
+    if (row['j'] !== undefined && row['Tijd (s)'] === undefined) {
+      row['Tijd (s)'] = row['j'];
+    }
+  });
+
+  // Parse settings
+  const settingsSheet = wb.Sheets['Simulatie Instellingen'];
+  const settings = settingsSheet ? XLSX.utils.sheet_to_json(settingsSheet) : [];
+  const settingsMap = {};
+  settings.forEach(r => { settingsMap[r.Instelling] = r.Waarde; });
+
+  // Parse start values
+  const startSheet = wb.Sheets['Start Waarden'];
+  const startValues = startSheet ? XLSX.utils.sheet_to_json(startSheet) : [];
+  const startMap = {};
+  startValues.forEach(r => { startMap[r.Parameter] = r.Waarde; });
+
+  // Detect method
+  const methodRaw = settingsMap['Integratie Methode'] || 'Onbekend';
+  const isClassic = methodRaw.toLowerCase().includes('classic');
+  const method = isClassic ? 'Classic Verlet' : 'Velocity Verlet';
+  const color = isClassic ? classicColors[classicIdx++ % classicColors.length] : velocityColors[velocityIdx++ % velocityColors.length];
+
+  return {
+    name,
+    method,
+    methodType: isClassic ? 'classic' : 'velocity',
+    color,
+    metrics,
+    settings: settingsMap,
+    startValues: startMap,
+    visible: true,
+    included: true
+  };
+}
+
+function removeFile(idx) {
+  const f = state.files[idx];
+  if (f.methodType === 'classic') classicIdx = Math.max(0, classicIdx - 1);
+  else velocityIdx = Math.max(0, velocityIdx - 1);
+  state.files.splice(idx, 1);
+  renderAll();
+}
+
+// ===== FILTER =====
+function setFilter(filter, el) {
+  state.filter = filter;
+  document.querySelectorAll('.method-filter .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.files.forEach(f => {
+    f.visible = filter === 'all' || f.methodType === filter;
+  });
+  renderAll();
+}
+
+// ===== RENDER =====
+function renderAll() {
+  renderFileList();
+  if (state.files.length === 0) {
+    document.getElementById('dashboard').style.display = 'none';
+    dropZone.style.display = 'block';
+    return;
+  }
+  document.getElementById('dashboard').style.display = 'block';
+  dropZone.style.display = 'none';
+  renderScorecards();
+  renderRecommendation();
+  renderCharts();
+  renderDetailTable();
+  document.getElementById('fileCount').textContent = state.files.length + ' bestanden geladen';
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  el.innerHTML = state.files.map((f, i) =>
+    `<div class="file-tag">
+      <span class="dot" style="background:${f.color}"></span>
+      <span>${f.name.replace('.xlsx','')}</span>
+      <span style="color:var(--text-muted);font-size:11px">${f.method}</span>
+      <span class="remove" onclick="removeFile(${i})">&times;</span>
+    </div>`
+  ).join('');
+}
+
+// ===== SCORECARDS =====
+function renderScorecards() {
+  const included = getIncludedFiles();
+  const classics = included.filter(f => f.methodType === 'classic');
+  const velocities = included.filter(f => f.methodType === 'velocity');
+  if (classics.length === 0 || velocities.length === 0) {
+    document.getElementById('scorecards').innerHTML = '<p style="color:var(--text-muted);font-size:14px">Laad minstens 1 bestand per methode om vergelijkingen te zien.</p>';
+    return;
+  }
+
+  const avgFinalRek = files => {
+    const vals = files.map(f => { const m = f.metrics; return m[m.length - 1]['Gem. Rek (%)']; }).filter(v => v != null);
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+  const avgFinalMaxRek = files => {
+    const vals = files.map(f => { const m = f.metrics; return m[m.length - 1]['Max Rek (%)']; }).filter(v => v != null);
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+  const avgIterTime = files => {
+    const vals = files.map(f => {
+      const times = f.metrics.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+      return times.reduce((a, b) => a + b, 0) / times.length;
+    });
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+  const avgStability = files => {
+    // Stability = std dev of Gem. Rek over time (lower = more stable)
+    return files.map(f => {
+      const vals = f.metrics.map(r => r['Gem. Rek (%)']).filter(v => v != null);
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const variance = vals.reduce((a, v) => a + (v - mean) ** 2, 0) / vals.length;
+      return Math.sqrt(variance);
+    }).reduce((a, b) => a + b, 0) / files.length;
+  };
+
+  const cRek = avgFinalRek(classics);
+  const vRek = avgFinalRek(velocities);
+  const cMaxRek = avgFinalMaxRek(classics);
+  const vMaxRek = avgFinalMaxRek(velocities);
+  const cTime = avgIterTime(classics);
+  const vTime = avgIterTime(velocities);
+  const cStab = avgStability(classics);
+  const vStab = avgStability(velocities);
+
+  const cards = [
+    { label: 'Laagste Gem. Rek', cVal: cRek, vVal: vRek, unit: '%', lower: true },
+    { label: 'Laagste Max Rek', cVal: cMaxRek, vVal: vMaxRek, unit: '%', lower: true },
+    { label: 'Beste Performance', cVal: cTime, vVal: vTime, unit: 'ms', lower: true },
+    { label: 'Meeste Stabiliteit', cVal: cStab, vVal: vStab, unit: 'σ', lower: true }
+  ];
+
+  document.getElementById('scorecards').innerHTML = cards.map(c => {
+    const classicWins = c.lower ? c.cVal < c.vVal : c.cVal > c.vVal;
+    const winner = classicWins ? 'Classic Verlet' : 'Velocity Verlet';
+    const winClass = classicWins ? 'classic' : 'velocity';
+    const winVal = classicWins ? c.cVal : c.vVal;
+    const loseVal = classicWins ? c.vVal : c.cVal;
+    return `<div class="scorecard ${winClass}">
+      <div class="label">${c.label}</div>
+      <div class="winner">${winner}</div>
+      <div class="value">${winVal.toFixed(2)}${c.unit} vs ${loseVal.toFixed(2)}${c.unit}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== RECOMMENDATION =====
+function renderRecommendation() {
+  const included = getIncludedFiles();
+  const classics = included.filter(f => f.methodType === 'classic');
+  const velocities = included.filter(f => f.methodType === 'velocity');
+  const rec = document.getElementById('recommendation');
+
+  if (classics.length === 0 || velocities.length === 0) {
+    rec.style.display = 'none';
+    return;
+  }
+  rec.style.display = 'flex';
+
+  // Weighted scoring: rek 40%, max rek 20%, performance 20%, stability 20%
+  const score = (files) => {
+    const finalRek = files.map(f => f.metrics[f.metrics.length - 1]['Gem. Rek (%)']).filter(v => v != null);
+    const avgRek = finalRek.reduce((a, b) => a + b, 0) / finalRek.length;
+    const finalMaxRek = files.map(f => f.metrics[f.metrics.length - 1]['Max Rek (%)']).filter(v => v != null);
+    const avgMaxRek = finalMaxRek.reduce((a, b) => a + b, 0) / finalMaxRek.length;
+    const times = files.map(f => {
+      const t = f.metrics.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+      return t.reduce((a, b) => a + b, 0) / t.length;
+    });
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+    const stabs = files.map(f => {
+      const vals = f.metrics.map(r => r['Gem. Rek (%)']).filter(v => v != null);
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      return Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / vals.length);
+    });
+    const avgStab = stabs.reduce((a, b) => a + b, 0) / stabs.length;
+    return { avgRek, avgMaxRek, avgTime, avgStab };
+  };
+
+  const cScore = score(classics);
+  const vScore = score(velocities);
+
+  // Normalize: lower is better for all metrics, score = opponent / self (higher = better)
+  let cPoints = 0, vPoints = 0;
+  // Gem Rek (40%)
+  cPoints += (vScore.avgRek / Math.max(cScore.avgRek, 0.001)) * 0.4;
+  vPoints += (cScore.avgRek / Math.max(vScore.avgRek, 0.001)) * 0.4;
+  // Max Rek (20%)
+  cPoints += (vScore.avgMaxRek / Math.max(cScore.avgMaxRek, 0.001)) * 0.2;
+  vPoints += (cScore.avgMaxRek / Math.max(vScore.avgMaxRek, 0.001)) * 0.2;
+  // Performance (20%)
+  cPoints += (vScore.avgTime / Math.max(cScore.avgTime, 0.001)) * 0.2;
+  vPoints += (cScore.avgTime / Math.max(vScore.avgTime, 0.001)) * 0.2;
+  // Stability (20%)
+  cPoints += (vScore.avgStab / Math.max(cScore.avgStab, 0.001)) * 0.2;
+  vPoints += (cScore.avgStab / Math.max(vScore.avgStab, 0.001)) * 0.2;
+
+  const classicWins = cPoints > vPoints;
+  const winner = classicWins ? 'Classic Verlet' : 'Velocity Verlet';
+  const winColor = classicWins ? 'var(--classic-1)' : 'var(--velocity-1)';
+
+  document.getElementById('recBadge').textContent = 'AANBEVELING';
+  document.getElementById('recBadge').style.background = winColor;
+  document.getElementById('recText').innerHTML =
+    `Op basis van gewogen score (rek 40%, max rek 20%, performance 20%, stabiliteit 20%) is <strong style="color:${winColor}">${winner}</strong> de aanbevolen methode. ` +
+    `Score: Classic ${cPoints.toFixed(2)} vs Velocity ${vPoints.toFixed(2)}.`;
+}
+
+// ===== CHARTS =====
+const defaultChartOpts = {
+  responsive: true,
+  maintainAspectRatio: true,
+  aspectRatio: 1.6,
+  interaction: { mode: 'nearest', intersect: false },
+  plugins: {
+    legend: { labels: { color: '#8b90a0', font: { size: 11 }, boxWidth: 12, padding: 12 } },
+    tooltip: { backgroundColor: '#1a1d27', borderColor: '#2e3345', borderWidth: 1, titleFont: { size: 12 }, bodyFont: { size: 11 } },
+    zoom: {
+      pan: { enabled: true, mode: 'x' },
+      zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+    }
+  },
+  scales: {
+    x: { ticks: { color: '#8b90a0', font: { size: 10 } }, grid: { color: 'rgba(46,51,69,0.5)' } },
+    y: { ticks: { color: '#8b90a0', font: { size: 10 } }, grid: { color: 'rgba(46,51,69,0.5)' } }
+  }
+};
+
+function getVisibleFiles() {
+  return state.files.filter(f => f.visible);
+}
+
+function getIncludedFiles() {
+  return state.files.filter(f => f.visible && f.included);
+}
+
+function toggleFileInclusion(idx) {
+  state.files[idx].included = !state.files[idx].included;
+  updateInclusionCount();
+  renderWithoutTable();
+  updateTableRowStyles();
+}
+
+function toggleAllInclusion(checked) {
+  state.files.forEach(f => { if (f.visible) f.included = checked; });
+  // Update header checkbox
+  const headerCb = document.querySelector('#detailTable thead input[type="checkbox"]');
+  if (headerCb) headerCb.checked = checked;
+  // Update row checkboxes
+  document.querySelectorAll('#detailBody input[type="checkbox"]').forEach(cb => cb.checked = checked);
+  updateInclusionCount();
+  renderWithoutTable();
+  updateTableRowStyles();
+}
+
+function updateInclusionCount() {
+  const total = getVisibleFiles().length;
+  const included = getIncludedFiles().length;
+  document.getElementById('inclusionCount').textContent = included + ' van ' + total + ' meegenomen in analyse';
+}
+
+function updateTableRowStyles() {
+  const rows = document.querySelectorAll('#detailBody tr');
+  const visible = getVisibleFiles();
+  rows.forEach((row, i) => {
+    if (i < visible.length) {
+      row.classList.toggle('excluded', !visible[i].included);
+    }
+  });
+}
+
+function renderWithoutTable() {
+  renderScorecards();
+  renderRecommendation();
+  renderCharts();
+}
+
+function makeChart(id, config) {
+  if (state.charts[id]) state.charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  state.charts[id] = new Chart(ctx, config);
+}
+
+function timeSeriesDatasets(yKey) {
+  return getIncludedFiles().map(f => ({
+    label: f.name.replace('.xlsx', ''),
+    data: f.metrics.map(r => ({ x: r['Tijd (s)'], y: r[yKey] })),
+    borderColor: f.color,
+    backgroundColor: f.color + '22',
+    borderWidth: 2,
+    pointRadius: 2,
+    pointHoverRadius: 5,
+    tension: 0.3
+  }));
+}
+
+function renderCharts() {
+  const visible = getIncludedFiles();
+  if (visible.length === 0) return;
+
+  // 1. Gem Rek over Tijd
+  makeChart('chartGemRek', {
+    type: 'line',
+    data: { datasets: timeSeriesDatasets('Gem. Rek (%)') },
+    options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Gem. Rek (%)', color: '#8b90a0' } } } }
+  });
+
+  // 2. Max Rek over Tijd
+  makeChart('chartMaxRek', {
+    type: 'line',
+    data: { datasets: timeSeriesDatasets('Max Rek (%)') },
+    options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Max Rek (%)', color: '#8b90a0' } } } }
+  });
+
+  // 3. Box plot approximation (bar chart with error bars simulated)
+  renderBoxPlot();
+
+  // 4. Finale Rek per bestand
+  renderFinaleRekBar();
+
+  // 5. Component Rek
+  renderComponentChart();
+
+  // 6. Stiff charts
+  makeChart('chartGemRekStiff', {
+    type: 'line',
+    data: { datasets: timeSeriesDatasets('Gem. Rek Stiff (%)') },
+    options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Gem. Rek Stiff (%)', color: '#8b90a0' } } } }
+  });
+
+  makeChart('chartMaxRekStiff', {
+    type: 'line',
+    data: { datasets: timeSeriesDatasets('Max Rek Stiff (%)') },
+    options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Max Rek Stiff (%)', color: '#8b90a0' } } } }
+  });
+
+  // 7. Performance
+  makeChart('chartIterTime', {
+    type: 'line',
+    data: { datasets: visible.map(f => ({
+      label: f.name.replace('.xlsx', ''),
+      data: f.metrics.map(r => ({ x: r['Iteratie'], y: r['Gem. Iteratietijd (ms)'] })),
+      borderColor: f.color, backgroundColor: f.color + '22', borderWidth: 2, pointRadius: 2, tension: 0.3
+    })) },
+    options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Iteratie', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'ms per iteratie', color: '#8b90a0' } } } }
+  });
+
+  renderIterTimeBar();
+  renderEfficiency();
+
+  // 8. Delta charts
+  ['Delta Lengte (m)', 'Delta Breedte (m)', 'Delta Hoogte (m)'].forEach((key, i) => {
+    const ids = ['chartDeltaL', 'chartDeltaB', 'chartDeltaH'];
+    makeChart(ids[i], {
+      type: 'line',
+      data: { datasets: timeSeriesDatasets(key) },
+      options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: key, color: '#8b90a0' } } } }
+    });
+  });
+
+  // 9. Radar
+  renderRadar();
+}
+
+function renderBoxPlot() {
+  const visible = getIncludedFiles();
+  const classics = visible.filter(f => f.methodType === 'classic');
+  const velocities = visible.filter(f => f.methodType === 'velocity');
+
+  const getStats = (files) => {
+    const allVals = files.flatMap(f => f.metrics.map(r => r['Gem. Rek (%)'])).filter(v => v != null).sort((a, b) => a - b);
+    if (allVals.length === 0) return { min: 0, q1: 0, median: 0, q3: 0, max: 0, mean: 0 };
+    const q = (arr, p) => { const i = (arr.length - 1) * p; const lo = Math.floor(i); return arr[lo] + (arr[Math.ceil(i)] - arr[lo]) * (i - lo); };
+    return {
+      min: allVals[0], q1: q(allVals, 0.25), median: q(allVals, 0.5), q3: q(allVals, 0.75), max: allVals[allVals.length - 1],
+      mean: allVals.reduce((a, b) => a + b, 0) / allVals.length
+    };
+  };
+
+  const cStats = getStats(classics);
+  const vStats = getStats(velocities);
+
+  makeChart('chartBoxRek', {
+    type: 'bar',
+    data: {
+      labels: ['Classic Verlet', 'Velocity Verlet'],
+      datasets: [
+        { label: 'Min', data: [cStats.min, vStats.min], backgroundColor: ['#1a5fa866', '#a84e1a66'] },
+        { label: 'Q1', data: [cStats.q1, vStats.q1], backgroundColor: ['#2d7dd299', '#d46a2e99'] },
+        { label: 'Mediaan', data: [cStats.median, vStats.median], backgroundColor: ['var(--classic-1)', 'var(--velocity-1)'] },
+        { label: 'Q3', data: [cStats.q3, vStats.q3], backgroundColor: ['#6bb5ff99', '#ffaa6e99'] },
+        { label: 'Max', data: [cStats.max, vStats.max], backgroundColor: ['#89c4ff66', '#ffc49a66'] }
+      ]
+    },
+    options: {
+      ...defaultChartOpts,
+      scales: { ...defaultChartOpts.scales, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Gem. Rek (%)', color: '#8b90a0' } } }
+    }
+  });
+}
+
+function renderFinaleRekBar() {
+  const visible = getIncludedFiles();
+  makeChart('chartFinaleRek', {
+    type: 'bar',
+    data: {
+      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      datasets: [{
+        label: 'Finale Gem. Rek (%)',
+        data: visible.map(f => { const m = f.metrics; return m[m.length - 1]['Gem. Rek (%)']; }),
+        backgroundColor: visible.map(f => f.color + 'cc'),
+        borderColor: visible.map(f => f.color),
+        borderWidth: 1
+      }]
+    },
+    options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false } }, scales: { ...defaultChartOpts.scales, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Gem. Rek (%)', color: '#8b90a0' } } } }
+  });
+}
+
+function renderComponentChart() {
+  const visible = getIncludedFiles();
+  const components = ['Rek Panel (cm)', 'Rek Rope (cm)', 'Rek Chain (cm)', 'Rek BottomTendon (cm)', 'Rek TopTendon (cm)', 'Rek GroundTendon (cm)'];
+  const shortNames = ['Panel', 'Rope', 'Chain', 'Bottom Tendon', 'Top Tendon', 'Ground Tendon'];
+
+  makeChart('chartComponents', {
+    type: 'bar',
+    data: {
+      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 25)),
+      datasets: components.map((comp, i) => ({
+        label: shortNames[i],
+        data: visible.map(f => { const m = f.metrics; return m[m.length - 1][comp]; }),
+        backgroundColor: `hsl(${i * 55}, 60%, 55%)`,
+      }))
+    },
+    options: {
+      ...defaultChartOpts,
+      scales: {
+        ...defaultChartOpts.scales,
+        x: { ...defaultChartOpts.scales.x, stacked: true },
+        y: { ...defaultChartOpts.scales.y, stacked: true, title: { display: true, text: 'Rek (cm)', color: '#8b90a0' } }
+      }
+    }
+  });
+}
+
+function renderIterTimeBar() {
+  const visible = getIncludedFiles();
+  makeChart('chartIterTimeBar', {
+    type: 'bar',
+    data: {
+      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      datasets: [{
+        label: 'Gem. Iteratietijd (ms)',
+        data: visible.map(f => {
+          const times = f.metrics.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+          return times.reduce((a, b) => a + b, 0) / times.length;
+        }),
+        backgroundColor: visible.map(f => f.color + 'cc'),
+        borderColor: visible.map(f => f.color),
+        borderWidth: 1
+      }]
+    },
+    options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false } }, scales: { ...defaultChartOpts.scales, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'ms', color: '#8b90a0' } } } }
+  });
+}
+
+function renderEfficiency() {
+  const visible = getIncludedFiles();
+  makeChart('chartEfficiency', {
+    type: 'bar',
+    data: {
+      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      datasets: [{
+        label: 'Rek/ms (lager = beter)',
+        data: visible.map(f => {
+          const m = f.metrics;
+          const lastRek = m[m.length - 1]['Gem. Rek (%)'];
+          const times = m.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+          const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+          return lastRek / avgTime;
+        }),
+        backgroundColor: visible.map(f => f.color + 'cc'),
+        borderColor: visible.map(f => f.color),
+        borderWidth: 1
+      }]
+    },
+    options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, legend: { display: false } }, scales: { ...defaultChartOpts.scales, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Rek (%) per ms', color: '#8b90a0' } } } }
+  });
+}
+
+function renderRadar() {
+  const visible = getIncludedFiles();
+  const classics = visible.filter(f => f.methodType === 'classic');
+  const velocities = visible.filter(f => f.methodType === 'velocity');
+
+  const avgFinal = (files, key) => {
+    const vals = files.map(f => f.metrics[f.metrics.length - 1][key]).filter(v => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  };
+
+  const labels = ['Net Lengte (m)', 'Net Breedte (m)', 'Net Hoogte (m)'];
+  const datasets = [];
+
+  if (classics.length) {
+    datasets.push({
+      label: 'Classic Verlet (finaal)',
+      data: labels.map(l => avgFinal(classics, l)),
+      borderColor: 'var(--classic-1)', backgroundColor: 'rgba(74,158,255,0.15)', pointBackgroundColor: 'var(--classic-1)'
+    });
+  }
+  if (velocities.length) {
+    datasets.push({
+      label: 'Velocity Verlet (finaal)',
+      data: labels.map(l => avgFinal(velocities, l)),
+      borderColor: 'var(--velocity-1)', backgroundColor: 'rgba(255,140,66,0.15)', pointBackgroundColor: 'var(--velocity-1)'
+    });
+  }
+
+  // Add initial values from first file as reference
+  const ref = state.files[0];
+  if (ref) {
+    const initLabels = ['Initiële Net Lengte', 'Initiële Net Breedte', 'Initiële Net Hoogte'];
+    // Try various key patterns
+    const getInit = (key) => {
+      for (const k of Object.keys(ref.startValues)) {
+        if (k.includes('Lengte') && key.includes('Lengte')) return parseFloat(ref.startValues[k]) || 0;
+        if (k.includes('Breedte') && key.includes('Breedte')) return parseFloat(ref.startValues[k]) || 0;
+        if (k.includes('Hoogte') && key.includes('Hoogte')) return parseFloat(ref.startValues[k]) || 0;
+      }
+      return 0;
+    };
+    datasets.unshift({
+      label: 'Initieel',
+      data: labels.map(l => getInit(l)),
+      borderColor: '#666', backgroundColor: 'rgba(102,102,102,0.1)', borderDash: [5, 5], pointBackgroundColor: '#666'
+    });
+  }
+
+  makeChart('chartRadar', {
+    type: 'radar',
+    data: { labels: ['Lengte (m)', 'Breedte (m)', 'Hoogte (m)'], datasets },
+    options: {
+      responsive: true, maintainAspectRatio: true, aspectRatio: 1.3,
+      plugins: { legend: { labels: { color: '#8b90a0', font: { size: 11 } } } },
+      scales: {
+        r: {
+          ticks: { color: '#8b90a0', backdropColor: 'transparent' },
+          grid: { color: 'rgba(46,51,69,0.5)' },
+          angleLines: { color: 'rgba(46,51,69,0.5)' },
+          pointLabels: { color: '#8b90a0', font: { size: 12 } }
+        }
+      }
+    }
+  });
+}
+
+// ===== DETAIL TABLE =====
+function renderDetailTable() {
+  const visible = getVisibleFiles();
+  const tbody = document.getElementById('detailBody');
+
+  // Map visible files to their index in state.files
+  const fileIndices = visible.map(f => state.files.indexOf(f));
+
+  const rows = visible.map((f, vi) => {
+    const m = f.metrics;
+    const last = m[m.length - 1];
+    const times = m.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+    return {
+      name: f.name.replace('.xlsx', ''),
+      method: f.method,
+      color: f.color,
+      included: f.included,
+      stateIdx: fileIndices[vi],
+      subStepping: f.settings['Sub-stepping'] || '-',
+      halfStep: f.settings['Half-step Velocity'] || '-',
+      adaptive: f.settings['Adaptive Timestep'] || '-',
+      constraintIter: f.settings['Constraint Iteraties'] || '-',
+      stiffIter: f.settings['Stiff Element Iteraties'] || '-',
+      finaleGemRek: last['Gem. Rek (%)'],
+      finaleMaxRek: last['Max Rek (%)'],
+      avgIterTime: avgTime,
+      simDuur: last['Tijd (s)'],
+      iteraties: last['Iteratie']
+    };
+  });
+
+  // Find best/worst only among included files
+  const includedRows = rows.filter(r => r.included);
+  const numCols = ['finaleGemRek', 'finaleMaxRek', 'avgIterTime'];
+  const bests = {}, worsts = {};
+  numCols.forEach(col => {
+    const vals = includedRows.map(r => r[col]).filter(v => v != null);
+    bests[col] = vals.length ? Math.min(...vals) : null;
+    worsts[col] = vals.length ? Math.max(...vals) : null;
+  });
+
+  tbody.innerHTML = rows.map(r => {
+    const cellClass = (col, val) => {
+      if (!r.included) return '';
+      if (val === bests[col] && includedRows.length > 1) return 'cell-best';
+      if (val === worsts[col] && includedRows.length > 1) return 'cell-worst';
+      return '';
+    };
+    const exClass = r.included ? '' : ' excluded';
+    return `<tr class="${exClass}">
+      <td class="cb-cell"><input type="checkbox" ${r.included ? 'checked' : ''} onchange="toggleFileInclusion(${r.stateIdx})"></td>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:6px;vertical-align:middle"></span>${r.name}</td>
+      <td>${r.method}</td>
+      <td>${r.subStepping}</td>
+      <td>${r.halfStep}</td>
+      <td>${r.adaptive}</td>
+      <td>${r.constraintIter}</td>
+      <td>${r.stiffIter}</td>
+      <td class="${cellClass('finaleGemRek', r.finaleGemRek)}">${r.finaleGemRek?.toFixed(2) ?? '-'}</td>
+      <td class="${cellClass('finaleMaxRek', r.finaleMaxRek)}">${r.finaleMaxRek?.toFixed(2) ?? '-'}</td>
+      <td class="${cellClass('avgIterTime', r.avgIterTime)}">${r.avgIterTime?.toFixed(2) ?? '-'}</td>
+      <td>${r.simDuur?.toFixed(1) ?? '-'}</td>
+      <td>${r.iteraties ?? '-'}</td>
+    </tr>`;
+  }).join('');
+
+  updateInclusionCount();
+
+  // Sync header checkbox
+  const allIncluded = visible.every(f => f.included);
+  const headerCb = document.querySelector('#detailTable thead input[type="checkbox"]');
+  if (headerCb) headerCb.checked = allIncluded;
+}
+
+// Table sorting
+function sortTable(colIdx) {
+  const tbody = document.getElementById('detailBody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const asc = state.sortCol === colIdx ? !state.sortAsc : true;
+  state.sortCol = colIdx;
+  state.sortAsc = asc;
+
+  rows.sort((a, b) => {
+    let aVal = a.cells[colIdx].textContent.trim();
+    let bVal = b.cells[colIdx].textContent.trim();
+    const aNum = parseFloat(aVal);
+    const bNum = parseFloat(bVal);
+    if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
+    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+}
+</script>
+</body>
+</html>
