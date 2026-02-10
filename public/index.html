@@ -368,6 +368,7 @@ body {
   <h1><span>NetDesigner</span> — Verlet Integratie Vergelijking</h1>
   <div class="header-actions">
     <span id="fileCount" style="font-size:13px;color:var(--text-muted)">0 bestanden geladen</span>
+    <button class="btn" onclick="exportMetrics()">Export</button>
     <button class="btn" onclick="window.print()">Print</button>
     <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Bestanden Toevoegen</button>
   </div>
@@ -1186,6 +1187,125 @@ function sortTable(colIdx) {
   });
 
   rows.forEach(r => tbody.appendChild(r));
+}
+
+// ===== EXPORT VOOR CLAUDE =====
+function exportMetrics() {
+  const included = getIncludedFiles();
+  if (included.length === 0) { alert('Geen bestanden geselecteerd voor export.'); return; }
+
+  const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  let md = `# Verlet Integratie Vergelijking — Metrics Export\n`;
+  md += `> Gegenereerd: ${ts}\n`;
+  md += `> Aantal bestanden in analyse: ${included.length}\n\n`;
+
+  // -- Simulatie instellingen per bestand --
+  md += `## Simulatie Configuraties\n\n`;
+  md += `| Bestand | Methode | Constraint Iter. | Stiff Iter. | Sub-stepping | Half-step | Adaptive | Demping |\n`;
+  md += `|---------|---------|-----------------|-------------|--------------|-----------|----------|---------|\n`;
+  included.forEach(f => {
+    const s = f.settings;
+    md += `| ${f.name} | ${f.method} | ${s['Constraint Iteraties'] || '-'} | ${s['Stiff Element Iteraties'] || '-'} | ${s['Sub-stepping'] || '-'} | ${s['Half-step Velocity'] || '-'} | ${s['Adaptive Timestep'] || '-'} | ${s['Demping Coefficient'] || '-'} |\n`;
+  });
+
+  // -- Start waarden --
+  md += `\n## Initiële Condities\n\n`;
+  const ref = included[0];
+  if (ref.startValues && Object.keys(ref.startValues).length > 0) {
+    md += `| Parameter | Waarde |\n|-----------|--------|\n`;
+    for (const [k, v] of Object.entries(ref.startValues)) {
+      md += `| ${k} | ${v} |\n`;
+    }
+  }
+
+  // -- Overzichtstabel --
+  md += `\n## Overzicht Resultaten\n\n`;
+  md += `| Bestand | Methode | Finale Gem. Rek (%) | Finale Max Rek (%) | Gem. Rek Stiff (%) | Max Rek Stiff (%) | Gem. Iteratietijd (ms) | Simulatieduur (s) | Iteraties |\n`;
+  md += `|---------|---------|--------------------:|-------------------:|-------------------:|------------------:|-----------------------:|------------------:|----------:|\n`;
+  included.forEach(f => {
+    const m = f.metrics;
+    const last = m[m.length - 1];
+    const times = m.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+    md += `| ${f.name} | ${f.method} | ${last['Gem. Rek (%)']?.toFixed(4) ?? '-'} | ${last['Max Rek (%)']?.toFixed(4) ?? '-'} | ${last['Gem. Rek Stiff (%)']?.toFixed(4) ?? '-'} | ${last['Max Rek Stiff (%)']?.toFixed(4) ?? '-'} | ${avgTime.toFixed(4)} | ${last['Tijd (s)']?.toFixed(2) ?? '-'} | ${last['Iteratie'] ?? '-'} |\n`;
+  });
+
+  // -- Rek per component --
+  md += `\n## Rek per Component (cm) — Laatste Meting\n\n`;
+  md += `| Bestand | Methode | Panel | Rope | Chain | BottomTendon | TopTendon | GroundTendon |\n`;
+  md += `|---------|---------|------:|-----:|------:|-------------:|----------:|-------------:|\n`;
+  included.forEach(f => {
+    const last = f.metrics[f.metrics.length - 1];
+    md += `| ${f.name} | ${f.method} | ${last['Rek Panel (cm)']?.toFixed(4) ?? '-'} | ${last['Rek Rope (cm)']?.toFixed(4) ?? '-'} | ${last['Rek Chain (cm)']?.toFixed(4) ?? '-'} | ${last['Rek BottomTendon (cm)']?.toFixed(4) ?? '-'} | ${last['Rek TopTendon (cm)']?.toFixed(4) ?? '-'} | ${last['Rek GroundTendon (cm)']?.toFixed(4) ?? '-'} |\n`;
+  });
+
+  // -- Net deformatie --
+  md += `\n## Net Deformatie — Laatste Meting\n\n`;
+  md += `| Bestand | Methode | Net Lengte (m) | Net Breedte (m) | Net Hoogte (m) | Delta Lengte (m) | Delta Breedte (m) | Delta Hoogte (m) |\n`;
+  md += `|---------|---------|---------------:|----------------:|---------------:|-----------------:|------------------:|-----------------:|\n`;
+  included.forEach(f => {
+    const last = f.metrics[f.metrics.length - 1];
+    md += `| ${f.name} | ${f.method} | ${last['Net Lengte (m)']?.toFixed(4) ?? '-'} | ${last['Net Breedte (m)']?.toFixed(4) ?? '-'} | ${last['Net Hoogte (m)']?.toFixed(4) ?? '-'} | ${last['Delta Lengte (m)']?.toFixed(4) ?? '-'} | ${last['Delta Breedte (m)']?.toFixed(4) ?? '-'} | ${last['Delta Hoogte (m)']?.toFixed(4) ?? '-'} |\n`;
+  });
+
+  // -- Aggregatie per methode --
+  md += `\n## Aggregatie per Methode\n\n`;
+  const methods = ['classic', 'velocity'];
+  const methodNames = { classic: 'Classic Verlet', velocity: 'Velocity Verlet' };
+
+  methods.forEach(mt => {
+    const files = included.filter(f => f.methodType === mt);
+    if (files.length === 0) return;
+
+    md += `### ${methodNames[mt]} (${files.length} bestanden)\n\n`;
+
+    const finalReks = files.map(f => f.metrics[f.metrics.length - 1]['Gem. Rek (%)']).filter(v => v != null);
+    const finalMaxReks = files.map(f => f.metrics[f.metrics.length - 1]['Max Rek (%)']).filter(v => v != null);
+    const finalStiffReks = files.map(f => f.metrics[f.metrics.length - 1]['Gem. Rek Stiff (%)']).filter(v => v != null);
+    const avgTimes = files.map(f => {
+      const t = f.metrics.map(r => r['Gem. Iteratietijd (ms)']).filter(v => v != null);
+      return t.reduce((a, b) => a + b, 0) / t.length;
+    });
+
+    const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const min = arr => arr.length ? Math.min(...arr) : 0;
+    const max = arr => arr.length ? Math.max(...arr) : 0;
+    const std = arr => {
+      if (arr.length < 2) return 0;
+      const m = avg(arr);
+      return Math.sqrt(arr.reduce((a, v) => a + (v - m) ** 2, 0) / arr.length);
+    };
+
+    md += `| Metric | Gem. | Min | Max | Std Dev |\n`;
+    md += `|--------|-----:|----:|----:|--------:|\n`;
+    md += `| Finale Gem. Rek (%) | ${avg(finalReks).toFixed(4)} | ${min(finalReks).toFixed(4)} | ${max(finalReks).toFixed(4)} | ${std(finalReks).toFixed(4)} |\n`;
+    md += `| Finale Max Rek (%) | ${avg(finalMaxReks).toFixed(4)} | ${min(finalMaxReks).toFixed(4)} | ${max(finalMaxReks).toFixed(4)} | ${std(finalMaxReks).toFixed(4)} |\n`;
+    md += `| Finale Gem. Rek Stiff (%) | ${avg(finalStiffReks).toFixed(4)} | ${min(finalStiffReks).toFixed(4)} | ${max(finalStiffReks).toFixed(4)} | ${std(finalStiffReks).toFixed(4)} |\n`;
+    md += `| Gem. Iteratietijd (ms) | ${avg(avgTimes).toFixed(4)} | ${min(avgTimes).toFixed(4)} | ${max(avgTimes).toFixed(4)} | ${std(avgTimes).toFixed(4)} |\n`;
+    md += `\n`;
+  });
+
+  // -- Volledige tijdreeks data per bestand --
+  md += `## Volledige Tijdreeks Data\n\n`;
+  included.forEach(f => {
+    md += `### ${f.name} (${f.method})\n\n`;
+    const cols = ['Tijd (s)', 'Iteratie', 'Gem. Rek (%)', 'Gem. Rek (cm)', 'Max Rek (%)', 'Max Rek (cm)', 'Gem. Rek Stiff (%)', 'Gem. Rek Stiff (cm)', 'Max Rek Stiff (%)', 'Max Rek Stiff (cm)', 'Gem. Iteratietijd (ms)'];
+    md += `| ${cols.join(' | ')} |\n`;
+    md += `| ${cols.map(() => '---:').join(' | ')} |\n`;
+    f.metrics.forEach(row => {
+      md += `| ${cols.map(c => row[c] != null ? Number(row[c]).toFixed(4) : '-').join(' | ')} |\n`;
+    });
+    md += `\n`;
+  });
+
+  // Download
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `verlet-metrics-export-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>
