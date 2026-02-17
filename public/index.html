@@ -394,6 +394,15 @@ body {
       <div class="chip velocity" data-filter="velocity" onclick="setFilter('velocity',this)">Velocity Verlet</div>
     </div>
 
+    <!-- Dash pattern legend -->
+    <div style="display:flex;gap:24px;align-items:center;margin-bottom:16px;font-size:12px;color:var(--text-muted)">
+      <span style="font-weight:600;color:var(--text)">Lijnstijl:</span>
+      <span><svg width="32" height="2" style="vertical-align:middle"><line x1="0" y1="1" x2="32" y2="1" stroke="currentColor" stroke-width="2"/></svg> Geen extras</span>
+      <span><svg width="32" height="2" style="vertical-align:middle"><line x1="0" y1="1" x2="32" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="8,4"/></svg> Sub-stepping</span>
+      <span><svg width="32" height="2" style="vertical-align:middle"><line x1="0" y1="1" x2="32" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="3,3"/></svg> Half-step</span>
+      <span><svg width="32" height="2" style="vertical-align:middle"><line x1="0" y1="1" x2="32" y2="1" stroke="currentColor" stroke-width="2" stroke-dasharray="8,4,3,4"/></svg> Sub + Half</span>
+    </div>
+
     <!-- Recommendation -->
     <div class="recommendation" id="recommendation">
       <div class="badge" id="recBadge">AANBEVELING</div>
@@ -558,11 +567,29 @@ function parseWorkbook(wb, name) {
   const method = isClassic ? 'Classic Verlet' : 'Velocity Verlet';
   const color = isClassic ? classicColors[classicIdx++ % classicColors.length] : velocityColors[velocityIdx++ % velocityColors.length];
 
+  // Build short label: "VV | Sub + Half + Adapt" or "CV | Adapt"
+  const methodShort = isClassic ? 'CV' : 'VV';
+  const flags = [];
+  if (settingsMap['Sub-stepping'] === 'Aan') flags.push('Sub');
+  if (settingsMap['Half-step Velocity'] === 'Aan') flags.push('Half');
+  if (settingsMap['Adaptive Timestep'] === 'Aan') flags.push('Adapt');
+  const shortLabel = flags.length > 0 ? `${methodShort} | ${flags.join(' + ')}` : methodShort;
+
+  // Dash pattern based on Sub-stepping + Half-step combination
+  const hasSub = settingsMap['Sub-stepping'] === 'Aan';
+  const hasHalf = settingsMap['Half-step Velocity'] === 'Aan';
+  let borderDash = [];           // solid = no extras
+  if (hasSub && hasHalf) borderDash = [10, 5, 3, 5]; // dash-dot
+  else if (hasSub)       borderDash = [10, 5];        // dashed
+  else if (hasHalf)      borderDash = [3, 3];         // dotted
+
   return {
     name,
     method,
     methodType: isClassic ? 'classic' : 'velocity',
     color,
+    shortLabel,
+    borderDash,
     metrics,
     settings: settingsMap,
     startValues: startMap,
@@ -612,8 +639,8 @@ function renderFileList() {
   el.innerHTML = state.files.map((f, i) =>
     `<div class="file-tag">
       <span class="dot" style="background:${f.color}"></span>
-      <span>${f.name.replace('.xlsx','')}</span>
-      <span style="color:var(--text-muted);font-size:11px">${f.method}</span>
+      <span style="font-weight:600">${f.shortLabel}</span>
+      <span style="color:var(--text-muted);font-size:11px">${f.name.replace('.xlsx','')}</span>
       <span class="remove" onclick="removeFile(${i})">&times;</span>
     </div>`
   ).join('');
@@ -754,7 +781,23 @@ const defaultChartOpts = {
   interaction: { mode: 'nearest', intersect: false },
   plugins: {
     legend: { labels: { color: '#8b90a0', font: { size: 11 }, boxWidth: 12, padding: 12 } },
-    tooltip: { backgroundColor: '#1a1d27', borderColor: '#2e3345', borderWidth: 1, titleFont: { size: 12 }, bodyFont: { size: 11 } },
+    tooltip: {
+      backgroundColor: '#1a1d27', borderColor: '#2e3345', borderWidth: 1, titleFont: { size: 12 }, bodyFont: { size: 11 },
+      callbacks: {
+        title: (items) => {
+          if (!items.length) return '';
+          return items.map(item => {
+            const f = getIncludedFiles()[item.datasetIndex];
+            return f ? f.shortLabel : item.dataset.label;
+          });
+        },
+        afterTitle: (items) => {
+          if (!items.length) return '';
+          const f = getIncludedFiles()[items[0].datasetIndex];
+          return f ? f.name.replace('.xlsx', '') : '';
+        }
+      }
+    },
     zoom: {
       pan: { enabled: true, mode: 'x' },
       zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
@@ -824,10 +867,11 @@ function makeChart(id, config) {
 
 function timeSeriesDatasets(yKey) {
   return getIncludedFiles().map(f => ({
-    label: f.name.replace('.xlsx', ''),
+    label: f.shortLabel,
     data: f.metrics.map(r => ({ x: r['Tijd (s)'], y: r[yKey] })),
     borderColor: f.color,
     backgroundColor: f.color + '22',
+    borderDash: f.borderDash,
     borderWidth: 2,
     pointRadius: 2,
     pointHoverRadius: 5,
@@ -879,9 +923,9 @@ function renderCharts() {
   makeChart('chartIterTime', {
     type: 'line',
     data: { datasets: visible.map(f => ({
-      label: f.name.replace('.xlsx', ''),
+      label: f.shortLabel,
       data: f.metrics.map(r => ({ x: r['Iteratie'], y: r['Gem. Iteratietijd (ms)'] })),
-      borderColor: f.color, backgroundColor: f.color + '22', borderWidth: 2, pointRadius: 2, tension: 0.3
+      borderColor: f.color, backgroundColor: f.color + '22', borderDash: f.borderDash, borderWidth: 2, pointRadius: 2, tension: 0.3
     })) },
     options: { ...defaultChartOpts, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Iteratie', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'ms per iteratie', color: '#8b90a0' } } } }
   });
@@ -952,7 +996,7 @@ function renderFinaleRekBar() {
   makeChart('chartFinaleRek', {
     type: 'bar',
     data: {
-      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      labels: visible.map(f => f.shortLabel),
       datasets: [{
         label: 'Finale Gem. Rek (%)',
         data: visible.map(f => { const m = f.metrics; return m[m.length - 1]['Gem. Rek (%)']; }),
@@ -973,7 +1017,7 @@ function renderComponentChart() {
   makeChart('chartComponents', {
     type: 'bar',
     data: {
-      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 25)),
+      labels: visible.map(f => f.shortLabel),
       datasets: components.map((comp, i) => ({
         label: shortNames[i],
         data: visible.map(f => { const m = f.metrics; return m[m.length - 1][comp]; }),
@@ -996,7 +1040,7 @@ function renderIterTimeBar() {
   makeChart('chartIterTimeBar', {
     type: 'bar',
     data: {
-      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      labels: visible.map(f => f.shortLabel),
       datasets: [{
         label: 'Gem. Iteratietijd (ms)',
         data: visible.map(f => {
@@ -1017,7 +1061,7 @@ function renderEfficiency() {
   makeChart('chartEfficiency', {
     type: 'bar',
     data: {
-      labels: visible.map(f => f.name.replace('.xlsx', '').substring(0, 30)),
+      labels: visible.map(f => f.shortLabel),
       datasets: [{
         label: 'Rek/ms (lager = beter)',
         data: visible.map(f => {
