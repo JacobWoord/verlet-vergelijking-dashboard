@@ -442,6 +442,7 @@ body {
         <div class="chart-card"><h3>Delta Breedte (m) over Tijd</h3><canvas id="chartDeltaB"></canvas></div>
         <div class="chart-card"><h3>Delta Hoogte (m) over Tijd</h3><canvas id="chartDeltaH"></canvas></div>
         <div class="chart-card"><h3>Net Dimensies: Initieel vs Finaal</h3><canvas id="chartRadar"></canvas></div>
+        <div class="chart-card full-width"><h3>Net Hoogte (m) over Tijd</h3><canvas id="chartNetHoogte"></canvas></div>
       </div>
     </div>
 
@@ -900,6 +901,13 @@ function renderCharts() {
 
   // 9. Radar
   renderRadar();
+
+  // 10. Net Hoogte (absolute) over Tijd — full-width
+  makeChart('chartNetHoogte', {
+    type: 'line',
+    data: { datasets: timeSeriesDatasets('Net Hoogte (m)') },
+    options: { ...defaultChartOpts, aspectRatio: 2.5, scales: { ...defaultChartOpts.scales, x: { ...defaultChartOpts.scales.x, type: 'linear', title: { display: true, text: 'Tijd (s)', color: '#8b90a0' } }, y: { ...defaultChartOpts.scales.y, title: { display: true, text: 'Net Hoogte (m)', color: '#8b90a0' } } } }
+  });
 }
 
 function renderBoxPlot() {
